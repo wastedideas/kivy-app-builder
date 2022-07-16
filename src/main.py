@@ -288,7 +288,7 @@ class ZenMoneyLayout(GridLayout):
 
 
 class ZenMoneyApp(App):
-    icon = "zen_ico.ico"
+    icon = "zen_ico.png"
     title = "Zen Money 💰"
 
     def build(self):
