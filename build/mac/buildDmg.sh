@@ -33,7 +33,7 @@ ls -lah
 
 brew install sdl2 sdl2_image sdl2_ttf sdl2_mixer
 ${PIP_PATH} install setuptools wheel kivy openpyxl
-${PIP_PATH} install pyinstaller==5.1
+${PIP_PATH} install pyinstaller==3.6
 
 #####################
 # PYINSTALLER BUILD #
