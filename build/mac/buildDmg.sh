@@ -79,7 +79,7 @@ coll = COLLECT(exe, Tree('../src/'),
                name='${APP_NAME}')
 app = BUNDLE(coll,
              name='${APP_NAME}.app',
-             icon=None,
+             icon='../src/zen_ico.png',
              bundle_identifier=None)
 EOF
 

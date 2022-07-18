@@ -1,6 +1,8 @@
-import platform, os
-if platform.system() == 'Windows':
-    os.environ['KIVY_GL_BACKEND'] = 'angle_sdl2'
+import os
+import platform
+
+if platform.system() == "Windows":
+    os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
 
 import csv
 import typing
@@ -31,8 +33,6 @@ MAIN_ZEN_FIELDS = [
     "createdDate",
     "changedDate"
 ]
-
-path = os.path.abspath("/Users/gmpolunin/Downloads/2022-07-09T21-32-26.xlsm")
 
 
 class CSVSniffer:
