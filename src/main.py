@@ -17,7 +17,9 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.xml.constants import XLSM
+from kivy.core.window import Window
+
+Window.size = (1200, 600)
 
 MAIN_ZEN_FIELDS = [
     "date",
@@ -98,11 +100,11 @@ class ExcelWorker:
         self.__sheets_to_create: typing.Tuple = sheets_to_create
         self.__load_or_create_wb(self.__want_cleared, self.__sheets_to_create)
 
-    def fill_workbook(self, all_data: typing.Dict[str, typing.List]) -> Workbook:
+    def fill_workbook(self, all_data: typing.Dict[str, typing.List]):
         try:
             for k, v in all_data.items():
                 self.__create_and_fill_ws(sheet_name=k, data_to_fill=v)
-            return self.__save_and_close_wb()
+            self.__save_and_close_wb()
         except Exception as e:
             raise ExcelWorkerException(exc=e)
 
@@ -113,7 +115,6 @@ class ExcelWorker:
     def __load_or_create_wb(self, want_cleared: bool, sheets_to_create: typing.Tuple):
         if want_cleared:
             self.__workbook = Workbook()
-            self.__workbook.template = XLSM
             self.__workbook.remove(worksheet=self.__workbook.active)
 
             if sheets_to_create:
@@ -125,7 +126,6 @@ class ExcelWorker:
     def __save_and_close_wb(self):
         self.__workbook.save(self.__full_workbook_name)
         self.__workbook.close()
-        return self.__workbook
 
     def __rename_and_pick_first_ws(self, sheet_name: str) -> Worksheet:
         ws: Worksheet = self.__workbook.worksheets[0]
@@ -180,8 +180,8 @@ class ZenMoneyJob:
     def __prepare_data_with_dir_path(self) -> typing.List[typing.Dict]:
         return list(self.__csv_hunter.get_files_with_lines_for_set_dir())
 
-    def __paste_prepared_data_at_workbook(self, prepared_data: typing.Dict[str, typing.List]) -> Workbook:
-        return self.__excel_worker.fill_workbook(all_data=prepared_data)
+    def __paste_prepared_data_at_workbook(self, prepared_data: typing.Dict[str, typing.List]):
+        self.__excel_worker.fill_workbook(all_data=prepared_data)
 
     def find_csv_files_and_paste_lines_to_excel(self):
         try:
