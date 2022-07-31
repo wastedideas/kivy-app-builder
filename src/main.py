@@ -19,7 +19,7 @@ from dateutil.rrule import rruleset, rrulestr
 from datetime import datetime, timezone
 from pathlib import Path
 
-Window.size = (1200, 600)
+Window.size = (1200, 1500)
 
 path = "/Users/gmpolunin/Desktop/projects1/icsalendar/testkatyushka12345@gmail.com (2).ics"
 
@@ -452,7 +452,7 @@ class ICalendarLayout(GridLayout):
             self.error.text = f"{e.msg}\n{e.exc}"
         except Exception as e:
             self.error.color = "red"
-            self.error.text = f"{e}"
+            self.error.text = f"{e.__traceback__}"
 
     def update_rect(self, *args):
         self.rect.pos = self.pos
