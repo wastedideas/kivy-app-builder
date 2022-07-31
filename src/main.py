@@ -1,6 +1,6 @@
 import os
 import platform
-
+import traceback
 if platform.system() == "Windows":
     os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
 import pytz
@@ -452,7 +452,7 @@ class ICalendarLayout(GridLayout):
             self.error.text = f"{e.msg}\n{e.exc}"
         except Exception as e:
             self.error.color = "red"
-            self.error.text = f"{e.__traceback__}"
+            self.error.text = f"{traceback.format_exc()}"
 
     def update_rect(self, *args):
         self.rect.pos = self.pos
