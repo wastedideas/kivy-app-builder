@@ -64,7 +64,7 @@ class CSVSniffer:
 
     def __files_sniffer_by_pattern(self, curr_dir_path: str, files_list: typing.List[str]) -> typing.Generator:
         for file_name in files_list:
-            if file_name.startswith(self.__file_startswith):
+            if file_name.startswith(self.__file_startswith) and file_name.endswith(".csv"):
                 self.__start_row_flag = False
                 lines = self.__csv_file_parser(os.path.join(curr_dir_path, file_name))
                 yield {file_name: list(lines)}
@@ -87,11 +87,11 @@ class ExcelWorker:
     __workbook: typing.Optional[Workbook] = None
 
     def __init__(
-            self,
-            workbook_name: str,
-            workbook_extension: str = ".xlsx",
-            want_cleared: bool = True,
-            sheets_to_create: typing.Tuple = (),
+        self,
+        workbook_name: str,
+        workbook_extension: str = ".xlsx",
+        want_cleared: bool = True,
+        sheets_to_create: typing.Tuple = (),
     ):
         self.__workbook_name: str = workbook_name
         self.__workbook_extension: str = workbook_extension
@@ -242,7 +242,7 @@ class ZenMoneyLayout(GridLayout):
         )
         self.directory = TextInput(
             multiline=True,
-            hint_text="User/example/path/to/directory",
+            hint_text="User/example/path/to/directory/zen_.csv",
             is_focusable=True,
         )
         self.directory_input.add_widget(self.directory)
