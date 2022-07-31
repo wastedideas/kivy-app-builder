@@ -3,82 +3,77 @@ import platform
 
 if platform.system() == "Windows":
     os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
-
-import csv
+import pytz
 import typing
-from datetime import datetime
-from pathlib import Path
-
+from icalendar import Calendar
 from kivy.app import App
 from kivy.graphics import Rectangle, Color
 from kivy.uix import textinput
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
+from kivy.core.window import Window
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from kivy.core.window import Window
+from dateutil.rrule import rruleset, rrulestr
+from datetime import datetime, timezone
+from pathlib import Path
 
 Window.size = (1200, 600)
 
-MAIN_ZEN_FIELDS = [
-    "date",
-    "categoryName",
-    "payee",
-    "comment",
-    "outcomeAccountName",
-    "outcome",
-    "outcomeCurrencyShortTitle",
-    "incomeAccountName",
-    "income",
-    "incomeCurrencyShortTitle",
-    "createdDate",
-    "changedDate"
+path = "/Users/gmpolunin/Desktop/projects1/icsalendar/testkatyushka12345@gmail.com (2).ics"
+
+MAIN_ICS_FIELDS = [
+    "startdt",
+    "your_status",
+    "all_day",
+    "summary",
+    "declined_by_organizer",
+    "enddt",
 ]
 
+TZ_EUROPE_MOSCOW = "Europe/Moscow"
 
-class CSVSniffer:
-    def __init__(self, file_startswith: str, main_path: str, fields: typing.List):
-        self.__is_file: bool = os.path.isfile(main_path)
-        self.__start_row_flag: bool = False
-        self.__file_startswith: str = file_startswith
-        self.__main_path: str = Path(main_path).parent.absolute() if self.__is_file else main_path
-        self.__fields: typing.List = fields
 
-    def get_files_with_lines_for_set_dir(self) -> typing.List:
+class ICSSniffer:
+    def __init__(self, file_path: str):
+        self.__file_path: str = file_path
+        self.__file_endswith: str = ".ics"
+        self.__is_file: bool = os.path.isfile(file_path)
+        self.__main_path: str
+
+    def get_ics_file_string(self) -> typing.AnyStr:
         try:
-            return list(self.__main_dir_sniffer())
-        except Exception as e:
-            raise CSVSnifferException(exc=e)
+            return self.__read_ics_file()
+        except Exception as exc:
+            raise ICSSnifferException(exc=exc)
 
     @property
     def is_file(self) -> bool:
         return self.__is_file
 
-    def __main_dir_sniffer(self) -> typing.Generator:
-        # if not os.path.exists(self.__main_path) or (not os.path.isdir(self.__main_path) and not self.__is_file):
-        if not os.path.exists(self.__main_path) or not self.__is_file:
+    @property
+    def main_path(self) -> str:
+        return self.__main_path
+
+    def __read_ics_file(self) -> typing.AnyStr:
+        if any(
+            (
+                not os.path.exists(self.__file_path),
+                not self.__is_file,
+                not self.__file_path.endswith(self.__file_endswith),
+            )
+        ):
             raise NotADirectoryError
-        for dir_path, _, files_list in os.walk(self.__main_path):
-            yield from self.__files_sniffer_by_pattern(dir_path, files_list)
 
-    def __files_sniffer_by_pattern(self, curr_dir_path: str, files_list: typing.List[str]) -> typing.Generator:
-        for file_name in files_list:
-            if file_name.startswith(self.__file_startswith) and file_name.endswith(".csv"):
-                self.__start_row_flag = False
-                lines = self.__csv_file_parser(os.path.join(curr_dir_path, file_name))
-                yield {file_name: list(lines)}
+        if self.__is_file:
+            self.__main_path = str(Path(self.__file_path).parent.absolute())
 
-    def __csv_file_parser(self, abs_file_path: str) -> typing.Generator:
-        with open(abs_file_path, "r", encoding="utf-8") as csv_file:
-            for csv_line in csv.reader(csv_file):
-                if csv_line == self.__fields:
-                    self.__start_row_flag = True
-                if self.__start_row_flag is True:
-                    yield csv_line
+        with open(self.__file_path, "r", encoding="utf-8") as ics_file:
+            return ics_file.read()
 
 
-class CSVSnifferException(Exception):
+class ICSSnifferException(Exception):
     def __init__(self, exc: typing.Optional[Exception] = None):
         self.exc = exc
 
@@ -91,12 +86,16 @@ class ExcelWorker:
         workbook_name: str,
         workbook_extension: str = ".xlsx",
         want_cleared: bool = True,
+        date_fields: typing.List[str] = None,
+        date_format: str = "DD/MM/YYYY HH:MM:SS",
         sheets_to_create: typing.Tuple = (),
     ):
         self.__workbook_name: str = workbook_name
         self.__workbook_extension: str = workbook_extension
         self.__full_workbook_name: str = self.__workbook_name + self.__workbook_extension
         self.__want_cleared: bool = want_cleared
+        self.__date_fields: typing.List[str] = date_fields
+        self.__date_format: str = date_format
         self.__sheets_to_create: typing.Tuple = sheets_to_create
         self.__load_or_create_wb(self.__want_cleared, self.__sheets_to_create)
 
@@ -105,8 +104,8 @@ class ExcelWorker:
             for k, v in all_data.items():
                 self.__create_and_fill_ws(sheet_name=k, data_to_fill=v)
             self.__save_and_close_wb()
-        except Exception as e:
-            raise ExcelWorkerException(exc=e)
+        except Exception as exc:
+            raise ExcelWorkerException(exc=exc)
 
     @property
     def full_workbook_name(self) -> str:
@@ -135,8 +134,11 @@ class ExcelWorker:
     def __create_named_ws_in_wb(self, sheet_name: str) -> Worksheet:
         return self.__workbook.create_sheet(title=sheet_name)
 
-    @staticmethod
-    def __ws_append_with_data(ws: Worksheet, data: typing.List):
+    def __ws_append_with_data(self, ws: Worksheet, data: typing.List):
+        if self.__date_fields:
+            for ds in self.__date_fields:
+                ws.column_dimensions[ds].number_format = self.__date_format
+
         for data_row in data:
             ws.append(data_row)
 
@@ -150,52 +152,165 @@ class ExcelWorkerException(Exception):
         self.exc = exc
 
 
-class ZenMoneyJob:
-    def __init__(self, dir_path: str):
-        self.__dir_path: str = dir_path
-
-        self.__file_startswith: str = "zen_"
-        self.__csv_hunter_fields: typing.List[str] = MAIN_ZEN_FIELDS
-
-        self.__workbook_name: str = datetime.isoformat(datetime.now())[:19].replace(":", "-")
-
-        self.__csv_hunter: CSVSniffer = CSVSniffer(
-            file_startswith=self.__file_startswith,
-            main_path=self.__dir_path,
-            fields=self.__csv_hunter_fields,
+class ICalendarParser:
+    def __init__(self, ics_string: str, mail_to: str, start_date: datetime, end_date: datetime):
+        self.__ics_string: str = ics_string
+        self.__mail_to: str = mail_to
+        self.__start_date: datetime = start_date
+        self.__end_date: datetime = end_date
+        self.__events: typing.List = []
+        self.__cal = filter(
+            lambda c: c.name == "VEVENT",
+            Calendar.from_ical(self.__ics_string).walk()
         )
-        if self.__csv_hunter.is_file:
-            self.__excel_worker: ExcelWorker = ExcelWorker(
-                workbook_name=self.__dir_path,
-                workbook_extension="",
-                want_cleared=False,
-            )
-        else:
-            self.__excel_worker: ExcelWorker = ExcelWorker(
-                workbook_name=f"{self.__dir_path}/{self.__workbook_name}",
-                workbook_extension=".xlsm",
-                sheets_to_create=("Total", "Config"),
-            )
 
-    def __prepare_data_with_dir_path(self) -> typing.List[typing.Dict]:
-        return list(self.__csv_hunter.get_files_with_lines_for_set_dir())
+    def get_events_from_ics(self):
+        for vevent in self.__cal:
+            summary = str(vevent.get("summary"))
+            raw_star_dt = vevent.get("dtstart").dt
+            raw_end_dt = vevent.get("dtend").dt
 
-    def __paste_prepared_data_at_workbook(self, prepared_data: typing.Dict[str, typing.List]):
-        self.__excel_worker.fill_workbook(all_data=prepared_data)
+            organizer = vevent.get("organizer")
+            attendee = vevent.get("attendee")
+            your_status = str()
+            declined_by_organizer = False
+            if attendee and organizer:
+                for a in attendee:
+                    if a.params.get("cn") == organizer.params.get("cn") and a.params.get("partstat") == "DECLINED":
+                        declined_by_organizer = True
+                    if a.params.get("cn") == self.__mail_to:
+                        your_status = a.params.get("partstat")
 
-    def find_csv_files_and_paste_lines_to_excel(self):
-        try:
-            prepared_data = self.__prepare_data_with_dir_path()
-            for pd in prepared_data:
-                self.__paste_prepared_data_at_workbook(prepared_data=pd)
-            return self.__excel_worker.full_workbook_name
-        except CSVSnifferException as e:
-            raise ZenMoneyJobException(msg="Файловая ошибка. Директория/файл не найден.", exc=e.exc)
-        except ExcelWorkerException as e:
-            raise ZenMoneyJobException(msg="Внутренняя ошибка работы с Excel.", exc=e.exc)
+            end_dt = None
+            all_day = False
+            if not isinstance(raw_star_dt, datetime):
+                all_day = True
+                start_dt = self.__date_to_datetime(raw_star_dt)
+                if raw_end_dt:
+                    end_dt = self.__date_to_datetime(raw_end_dt)
+            else:
+                start_dt: datetime = raw_star_dt
+                end_dt = raw_end_dt
+
+            ex_date = vevent.get("exdate")
+            if vevent.get("rrule"):
+                reoccur = vevent.get("rrule").to_ical().decode("utf-8")
+                for rd in self.__get_recurrent_datetimes(reoccur, start_dt, self.__end_date, ex_date):
+                    new_e = {
+                        "startdt": rd,
+                        "your_status": your_status,
+                        "all_day": all_day,
+                        "summary": summary,
+                        "declined_by_organizer": declined_by_organizer,
+                    }
+                    if end_dt:
+                        new_e["enddt"] = rd + (end_dt - start_dt)
+                    self.__append_event(ne=new_e, start=self.__start_date, end=self.__end_date)
+            else:
+                self.__append_event(
+                    {
+                        "startdt": start_dt if all_day else start_dt.astimezone(pytz.timezone(TZ_EUROPE_MOSCOW)),
+                        "your_status": your_status,
+                        "all_day": all_day,
+                        "summary": summary,
+                        "declined_by_organizer": declined_by_organizer,
+                        "enddt": end_dt if all_day else end_dt.astimezone(pytz.timezone(TZ_EUROPE_MOSCOW))
+                    },
+                    start=self.__start_date,
+                    end=self.__end_date,
+                )
+        self.__events.sort(key=lambda event: event["startdt"])
+        self.__setup_none_tzinfo()
+        return self.__events
+
+    def __append_event(self, ne, start, end):
+        if ne["startdt"] > end:
+            return
+        if ne["enddt"]:
+            if ne["enddt"] < start:
+                return
+
+        self.__events.append(ne)
+
+    def __setup_none_tzinfo(self):
+        for event in self.__events:
+            for ek, ev in event.items():
+                if isinstance(ev, datetime):
+                    event[ek] = datetime(ev.year, ev.month, ev.day, ev.hour, ev.minute, ev.second, tzinfo=None)
+
+    @staticmethod
+    def __get_recurrent_datetimes(recur_rule, start, end, exclusions):
+        rules = rruleset()
+        first_rule = rrulestr(recur_rule, dtstart=start)
+        rules.rrule(first_rule)
+        if not isinstance(exclusions, list):
+            exclusions = [exclusions]
+
+        for xdt in exclusions:
+            try:
+                rules.exdate(xdt.dt)
+            except AttributeError:
+                pass
+
+        dates = []
+
+        for dl in rules.between(start, end):
+            dates.append(dl)
+        return dates
+
+    @staticmethod
+    def __date_to_datetime(dt):
+        return datetime(dt.year, dt.month, dt.day, tzinfo=timezone.utc)
 
 
-class ZenMoneyJobException(Exception):
+class ICalendarParserException(Exception):
+    def __init__(self, exc: typing.Optional[Exception] = None):
+        self.exc = exc
+
+
+class ICalendarJob:
+    def __init__(self, file_path: str, mail_to: str, start_date: datetime, end_date: datetime):
+        self.__file_path: str = file_path
+        self.__mail_to: str = mail_to
+        self.__start_date: datetime = start_date
+        self.__end_date: datetime = end_date
+        self.__workbook_name: str = f"{self.__mail_to}-{datetime.isoformat(datetime.now())[:19].replace(':', '-')}"
+        self.__ics_sniffer: ICSSniffer = ICSSniffer(
+            file_path=self.__file_path,
+        )
+
+    def run_sniff_and_write_ics_lines(self):
+        ics_sting: typing.AnyStr = self.__ics_sniffer.get_ics_file_string()
+        calendar_parser = ICalendarParser(
+            ics_string=ics_sting,
+            mail_to=self.__mail_to,
+            start_date=self.__start_date,
+            end_date=self.__end_date,
+        )
+
+        ics_list: typing.List = calendar_parser.get_events_from_ics()
+        excel_worker = ExcelWorker(
+            workbook_name=f"{self.__ics_sniffer.main_path}/{self.__workbook_name}",
+            date_fields=["A", "F"],
+        )
+        if ics_list:
+            try:
+                data_list = []
+
+                headers_list: typing.List = [h for h in ics_list[0].keys()]
+                data_list.append(headers_list)
+                for data in ics_list:
+                    data_list.append([data[ih] for ih in headers_list])
+
+                excel_worker.fill_workbook(all_data={self.__workbook_name: data_list})
+            except ICSSnifferException as e:
+                raise ICalendarJobException(msg="Файловая ошибка. Директория/файл не найден.", exc=e.exc)
+            except ExcelWorkerException as e:
+                raise ICalendarJobException(msg="Внутренняя ошибка работы с Excel.", exc=e.exc)
+        return self.__workbook_name
+
+
+class ICalendarJobException(Exception):
     def __init__(self, exc: typing.Optional[Exception] = None, msg: typing.Optional[str] = None):
         self.exc = exc
         self.msg = msg
@@ -211,13 +326,13 @@ class TextInput(textinput.TextInput):
         self.padding_y = [self.height / 2.0 - (self.line_height / 2.0) * len(self._lines), 0]
 
 
-VIOLET = .20, .06, .31, 1
+BLACK = 0, 0, 0, 1
 YELLOW = .988, .725, .074, 1
 
 
-class ZenMoneyLayout(GridLayout):
+class ICalendarLayout(GridLayout):
     def __init__(self, **kwargs):
-        super(ZenMoneyLayout, self).__init__(**kwargs)
+        super(ICalendarLayout, self).__init__(**kwargs)
 
         with self.canvas.before:
             Color(*YELLOW, mode="rgba")
@@ -227,14 +342,14 @@ class ZenMoneyLayout(GridLayout):
         self.cols = 1
         self.height = self.minimum_height
 
-        self.directory_input = GridLayout(
+        self.general_input = GridLayout(
             cols=2,
-            size_hint_y=.3,
+            size_hint_y=1,
         )
-        self.directory_input.add_widget(
+        self.general_input.add_widget(
             Label(
                 text="Путь до директории/файла:",
-                color=VIOLET,
+                color=BLACK,
                 bold=True,
                 text_size=(None, None),
                 font_size="20sp",
@@ -242,16 +357,65 @@ class ZenMoneyLayout(GridLayout):
         )
         self.directory = TextInput(
             multiline=True,
-            hint_text="User/example/path/to/directory/zen_.csv",
+            hint_text="User/example/path/to/directory",
             is_focusable=True,
         )
-        self.directory_input.add_widget(self.directory)
-        self.add_widget(self.directory_input)
+        self.general_input.add_widget(self.directory)
+
+        self.general_input.add_widget(
+            Label(
+                text="Электронная почта:",
+                color=BLACK,
+                bold=True,
+                text_size=(None, None),
+                font_size="20sp",
+            )
+        )
+        self.email = TextInput(
+            multiline=True,
+            hint_text="testkatyushka1234@gmail.com",
+            is_focusable=True,
+        )
+        self.general_input.add_widget(self.email)
+
+        self.general_input.add_widget(
+            Label(
+                text="Дата начала:",
+                color=BLACK,
+                bold=True,
+                text_size=(None, None),
+                font_size="20sp",
+            )
+        )
+        self.start_date = TextInput(
+            multiline=True,
+            hint_text="2022-07-01",
+            is_focusable=True,
+        )
+        self.general_input.add_widget(self.start_date)
+
+        self.general_input.add_widget(
+            Label(
+                text="Дата окончания:",
+                color=BLACK,
+                bold=True,
+                text_size=(None, None),
+                font_size="20sp",
+            )
+        )
+        self.end_date = TextInput(
+            multiline=True,
+            hint_text="2022-07-31",
+            is_focusable=True,
+        )
+        self.general_input.add_widget(self.end_date)
+
+        self.add_widget(self.general_input)
 
         self.submit = Button(
             text="Выполнить",
             background_normal="",
-            background_color=VIOLET,
+            background_color=BLACK,
             size_hint_y=.3,
             bold=True,
             text_size=(None, None),
@@ -272,28 +436,36 @@ class ZenMoneyLayout(GridLayout):
 
     def press(self, instance):
         try:
-            zmj = ZenMoneyJob(
-                dir_path=self.directory.text,
+            sd = datetime.strptime(self.start_date.text, "%Y-%m-%d")
+            ed = datetime.strptime(self.end_date.text, "%Y-%m-%d")
+            icj = ICalendarJob(
+                file_path=self.directory.text,
+                mail_to=self.email.text,
+                start_date=datetime(sd.year, sd.month, sd.day, 0, 0, 1, tzinfo=timezone.utc),
+                end_date=datetime(ed.year, ed.month, ed.day, 0, 0, 1, tzinfo=timezone.utc),
             )
-            new_excel = zmj.find_csv_files_and_paste_lines_to_excel()
+            new_excel = icj.run_sniff_and_write_ics_lines()
             self.error.color = "green"
             self.error.text = f"Успешно:\n{new_excel}"
-        except ZenMoneyJobException as e:
+        except ICalendarJobException as e:
             self.error.color = "red"
             self.error.text = f"{e.msg}\n{e.exc}"
+        except Exception as e:
+            self.error.color = "red"
+            self.error.text = f"{e}"
 
     def update_rect(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
 
 
-class ZenMoneyApp(App):
-    icon = "zen_ico.png"
-    title = "Zen Money 💰"
+class ICalendarApp(App):
+    icon = "calendar_ico.png"
+    title = "Calendar 🗓"
 
     def build(self):
-        return ZenMoneyLayout()
+        return ICalendarLayout()
 
 
 if __name__ == "__main__":
-    ZenMoneyApp().run()
+    ICalendarApp().run()

@@ -6,7 +6,7 @@ set -x
 
 PYTHON_PATH="`find /usr/local/Cellar/python@3.9 -type f -name python3.9 | head -n1`"
 PIP_PATH="`find /usr/local/Cellar/python@3.9 -type f -name pip3.9 | head -n1`"
-APP_NAME='ZenMoney'
+APP_NAME='Calendar'
 
 PYTHON_VERSION="`${PYTHON_PATH} --version | cut -d' ' -f2`"
 PYTHON_EXEC_VERSION="`echo ${PYTHON_VERSION} | cut -d. -f1-2`"
@@ -32,7 +32,7 @@ ls -lah
 ###################
 
 brew install sdl2 sdl2_image sdl2_ttf sdl2_mixer
-${PIP_PATH} install setuptools wheel kivy openpyxl
+${PIP_PATH} install setuptools wheel kivy openpyxl icalendar
 ${PIP_PATH} install pyinstaller==3.6
 
 #####################
@@ -79,7 +79,7 @@ coll = COLLECT(exe, Tree('../src/'),
                name='${APP_NAME}')
 app = BUNDLE(coll,
              name='${APP_NAME}.app',
-             icon='../src/zen_ico.png',
+             icon='../src/calendar_ico.png',
              bundle_identifier=None)
 EOF
 
