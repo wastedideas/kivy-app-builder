@@ -101,7 +101,6 @@ cp "dist/${APP_NAME}.dmg" ../dist/
 # OUTPUT VERSION INFO #
 #######################
 
-
 uname -a
 sw_vers
 which python2

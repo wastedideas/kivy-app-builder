@@ -1,6 +1,6 @@
 import os
 import platform
-import traceback
+
 if platform.system() == "Windows":
     os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
 import pytz
@@ -171,12 +171,21 @@ class ICalendarParser:
             raw_end_dt = vevent.get("dtend").dt
 
             organizer = vevent.get("organizer")
+            has_organizer = organizer and not isinstance(organizer, str)
+
             attendee = vevent.get("attendee")
-            your_status = str()
+            has_attendee = attendee and not isinstance(attendee, str)
+
+            your_status = ""
             declined_by_organizer = False
-            if attendee and organizer:
+
+            if has_attendee:
                 for a in attendee:
-                    if a.params.get("cn") == organizer.params.get("cn") and a.params.get("partstat") == "DECLINED":
+                    if (
+                        has_organizer
+                        and a.params.get("cn") == organizer.params.get("cn")
+                        and a.params.get("partstat") == "DECLINED"
+                    ):
                         declined_by_organizer = True
                     if a.params.get("cn") == self.__mail_to:
                         your_status = a.params.get("partstat")
@@ -441,8 +450,8 @@ class ICalendarLayout(GridLayout):
             icj = ICalendarJob(
                 file_path=self.directory.text,
                 mail_to=self.email.text,
-                start_date=datetime(sd.year, sd.month, sd.day, 0, 0, 1, tzinfo=timezone.utc),
-                end_date=datetime(ed.year, ed.month, ed.day, 0, 0, 1, tzinfo=timezone.utc),
+                start_date=datetime(sd.year, sd.month, sd.day, 0, 0, 0, tzinfo=timezone.utc),
+                end_date=datetime(ed.year, ed.month, ed.day, 23, 59, 59, tzinfo=timezone.utc),
             )
             new_excel = icj.run_sniff_and_write_ics_lines()
             self.error.color = "green"
@@ -452,7 +461,7 @@ class ICalendarLayout(GridLayout):
             self.error.text = f"{e.msg}\n{e.exc}"
         except Exception as e:
             self.error.color = "red"
-            self.error.text = f"{traceback.format_exc()}"
+            self.error.text = f"{e}"
 
     def update_rect(self, *args):
         self.rect.pos = self.pos
