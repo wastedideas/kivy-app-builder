@@ -1,27 +1,26 @@
 import os
 import platform
-
-if platform.system() == "Windows":
-    os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
-import pytz
 import typing
+from datetime import datetime, timezone, date
+from pathlib import Path
+
+import pytz
+from dateutil.rrule import rruleset, rrulestr
 from icalendar import Calendar
 from kivy.app import App
+from kivy.core.window import Window
 from kivy.graphics import Rectangle, Color
 from kivy.uix import textinput
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
-from kivy.core.window import Window
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from dateutil.rrule import rruleset, rrulestr
-from datetime import datetime, timezone
-from pathlib import Path
+
+if platform.system() == "Windows":
+    os.environ["KIVY_GL_BACKEND"] = "angle_sdl2"
 
 Window.size = (1200, 1500)
-
-path = "/Users/gmpolunin/Desktop/projects1/icsalendar/testkatyushka12345@gmail.com (2).ics"
 
 MAIN_ICS_FIELDS = [
     "startdt",
@@ -167,9 +166,12 @@ class ICalendarParser:
     def get_events_from_ics(self):
         for vevent in self.__cal:
             summary = str(vevent.get("summary"))
-            raw_star_dt = vevent.get("dtstart").dt
-            raw_end_dt = vevent.get("dtend").dt
-
+            raw_star_dt = vevent.get("dtstart")
+            raw_end_dt = vevent.get("dtend")
+            if raw_star_dt:
+                raw_star_dt = raw_star_dt.dt
+            if raw_end_dt:
+                raw_end_dt = raw_end_dt.dt
             organizer = vevent.get("organizer")
             has_organizer = organizer and not isinstance(organizer, str)
 
@@ -190,7 +192,7 @@ class ICalendarParser:
                     if a.params.get("cn") == self.__mail_to:
                         your_status = a.params.get("partstat")
 
-            end_dt = None
+            end_dt = self.__end_date
             all_day = False
             if not isinstance(raw_star_dt, datetime):
                 all_day = True
@@ -198,11 +200,14 @@ class ICalendarParser:
                 if raw_end_dt:
                     end_dt = self.__date_to_datetime(raw_end_dt)
             else:
-                start_dt: datetime = raw_star_dt
-                end_dt = raw_end_dt
+                start_dt = raw_star_dt
+                end_dt = raw_end_dt or end_dt
 
+            rrule = vevent.get("rrule")
             ex_date = vevent.get("exdate")
-            if vevent.get("rrule"):
+            if rrule:
+                if rrule.get("until") and isinstance(rrule.get("until")[0], date):
+                    continue
                 reoccur = vevent.get("rrule").to_ical().decode("utf-8")
                 for rd in self.__get_recurrent_datetimes(reoccur, start_dt, self.__end_date, ex_date):
                     new_e = {
@@ -308,8 +313,11 @@ class ICalendarJob:
 
                 headers_list: typing.List = [h for h in ics_list[0].keys()]
                 data_list.append(headers_list)
+
                 for data in ics_list:
-                    data_list.append([data[ih] for ih in headers_list])
+                    to_append = [data[ih] for ih in headers_list]
+                    if to_append not in data_list:
+                        data_list.append(to_append)
 
                 excel_worker.fill_workbook(all_data={self.__workbook_name: data_list})
             except ICSSnifferException as e:
@@ -440,6 +448,7 @@ class ICalendarLayout(GridLayout):
             text_size=(None, None),
             font_size="20sp",
             padding=[100, 100],
+            color=BLACK,
         )
         self.add_widget(self.error)
 
